@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation'; // Import the router
 import axios from 'axios';
 
 const LoginForm = () => {
@@ -8,6 +9,7 @@ const LoginForm = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const router = useRouter(); // Initialize the router
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +28,10 @@ const LoginForm = () => {
       setSuccess('Login successful! Redirecting...');
       console.log('Login successful:', response.data);
       
-      // Store the token and redirect the user
       localStorage.setItem('access_token', response.data.access_token);
-      // Example: window.location.href = '/dashboard';
+      
+      // Redirect to the lobby page
+      router.push('/lobby');
 
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'An unexpected error occurred.';
