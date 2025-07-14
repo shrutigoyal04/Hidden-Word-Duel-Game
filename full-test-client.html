@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hidden Word Duel - Full Test Client</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; background-color: #f0f0f0; padding: 2rem; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 90%; max-width: 800px; }
+        h1, h2, h3 { text-align: center; }
+        .section { border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; }
+        .controls > * { margin: 0.5rem; }
+        input[type="text"], input[type="password"] { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 0.5rem 1rem; border: none; border-radius: 4px; background-color: #007bff; color: white; cursor: pointer; }
+        button:disabled { background-color: #ccc; }
+        #log { width: 100%; height: 200px; white-space: pre-wrap; background: #eee; border: 1px solid #ccc; padding: 0.5rem; overflow-y: scroll; margin-top: 1rem; }
+        .status { font-weight: bold; }
+        .status.connected { color: green; }
+        .status.disconnected { color: red; }
+        #notification-area { min-height: 24px; width: 100%; margin-bottom: 1rem; padding: 1rem; box-sizing: border-box; background: #e9f7ff; border: 1px solid #99cfff; border-radius: 4px; text-align: center; font-size: 1.1rem; color: #004085; }
+        #score-area { display: none; text-align: center; font-size: 1.2rem; margin-bottom: 1rem; padding: 0.5rem; background-color: #f8f9fa; border-radius: 4px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Hidden Word Duel - Full Test Client</h1>
+
+        <!-- Section 1: Authentication -->
+        <div class="section">
+            <h2>1. Authentication</h2>
+            <div class="controls">
+                <input type="text" id="username" placeholder="Username">
+                <input type="password" id="password" placeholder="Password">
+                <button id="registerBtn">Register</button>
+                <button id="loginBtn">Log In</button>
+            </div>
+            <p><strong>Status:</strong> <span id="authStatus">Not logged in. Please register or log in.</span></p>
+        </div>
+
+        <!-- Section 2: Game -->
+        <div class="section">
+            <h2>2. Game</h2>
+            <div class="controls">
+                <button id="connectBtn" disabled>Connect to Game Server</button>
+                <button id="disconnectBtn" disabled>Disconnect</button>
+                <span id="wsStatus" class="status disconnected">Disconnected</span>
+            </div>
+            <div class="controls">
+                <button id="joinLobbyBtn" disabled>Join Lobby</button>
+                <input type="text" id="guessInput" placeholder="Enter your guess" disabled>
+                <button id="guessBtn" disabled>Guess Word</button>
+            </div>
+            <div id="notification-area"></div>
+            <div id="score-area">
+                <span id="my-score"></span> | <span id="opponent-score"></span>
+            </div>
+            <h3>Game Word</h3>
+            <div id="word-container" style="font-family: monospace; font-size: 2rem; letter-spacing: 0.5em; text-align: center; border: 1px solid #ddd; padding: 1rem;">_ _ _</div>
+            <div id="timer-container" style="text-align: center; margin-top: 1rem;">
+                Time left: <span id="timer-display" style="font-size: 1.5rem; font-weight: bold;">-</span>
+            </div>
+        </div>
+        
+        <!-- Section 3: Event Log -->
+        <div class="section">
+            <h2>Event Log</h2>
+            <textarea id="log" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let jwtToken = null;
+        let socket = null;
+        let myUsername = '';
+        let opponentUsername = '';
+        let countdownInterval;
+
+        // Element Getters
+        const el = (id) => document.getElementById(id);
+        const usernameInput = el('username');
+        const passwordInput = el('password');
+        const registerBtn = el('registerBtn');
+        const loginBtn = el('loginBtn');
+        const authStatus = el('authStatus');
+        const connectBtn = el('connectBtn');
+        const disconnectBtn = el('disconnectBtn');
+        const wsStatus = el('wsStatus');
+        const joinLobbyBtn = el('joinLobbyBtn');
+        const guessInput = el('guessInput');
+        const guessBtn = el('guessBtn');
+        const notificationArea = el('notification-area');
+        const scoreArea = el('score-area');
+        const myScoreSpan = el('my-score');
+        const opponentScoreSpan = el('opponent-score');
+        const wordContainer = el('word-container');
+        const timerDisplay = el('timer-display');
+        const log = el('log');
+
+        // --- Helper Functions ---
+        function showNotification(message) {
+            notificationArea.textContent = message;
+        }
+
+        function writeToLog(source, event, data) {
+            log.value += `[${source} | ${event}] ${JSON.stringify(data)}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateWordDisplay(letters) {
+            wordContainer.textContent = letters.map(l => l || '_').join(' ');
+        }
+        
+        // --- Authentication Logic ---
+        async function apiCall(endpoint, body) {
+            try {
+                const response = await fetch(`http://localhost:3000/auth/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                writeToLog('HTTP', endpoint, data);
+                if (!response.ok) {
+                    throw new Error(data.message || 'API request failed');
+                }
+                return data;
+            } catch (error) {
+                authStatus.textContent = `Error: ${error.message}`;
+                writeToLog('HTTP', 'Error', { message: error.message });
+                return null;
+            }
+        }
+
+        registerBtn.addEventListener('click', async () => {
+            const body = { username: usernameInput.value, password: passwordInput.value };
+            if (!body.username || !body.password) {
+                authStatus.textContent = 'Username and password are required for registration.';
+                return;
+            }
+            const data = await apiCall('register', body);
+            if (data) {
+                authStatus.textContent = `Successfully registered ${body.username}. Please log in.`;
+            }
+        });
+
+        loginBtn.addEventListener('click', async () => {
+            myUsername = usernameInput.value;
+            const body = { username: myUsername, password: passwordInput.value };
+            if (!body.username || !body.password) {
+                authStatus.textContent = 'Username and password are required for login.';
+                return;
+            }
+            const data = await apiCall('login', body);
+            if (data && data.access_token) {
+                jwtToken = data.access_token;
+                authStatus.textContent = `Logged in as ${myUsername}. You can now connect to the game server.`;
+                connectBtn.disabled = false;
+            }
+        });
+
+        // --- WebSocket Game Logic ---
+        function setupSocketListeners() {
+            socket.on('connect', () => {
+                wsStatus.textContent = 'Connected';
+                wsStatus.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                joinLobbyBtn.disabled = false;
+                showNotification(`Connected to game server. Ready to join lobby.`);
+                writeToLog('WS', 'connect', { id: socket.id });
+            });
+
+            socket.on('disconnect', () => {
+                wsStatus.textContent = 'Disconnected';
+                wsStatus.className = 'status disconnected';
+                connectBtn.disabled = jwtToken ? false : true; // Can only reconnect if logged in
+                disconnectBtn.disabled = true;
+                joinLobbyBtn.disabled = true;
+                guessBtn.disabled = true;
+                guessInput.disabled = true;
+                scoreArea.style.display = 'none';
+                if (countdownInterval) clearInterval(countdownInterval);
+                timerDisplay.textContent = '-';
+                showNotification('Disconnected from game server.');
+                writeToLog('WS', 'disconnect', {});
+            });
+
+            socket.on('matchStart', (data) => {
+                writeToLog('WS', 'matchStart', data);
+                opponentUsername = data.opponentId;
+                showNotification(`Match started! Your opponent is ${opponentUsername}.`);
+                joinLobbyBtn.textContent = 'Join Lobby';
+                joinLobbyBtn.disabled = true;
+                guessInput.disabled = false;
+                guessBtn.disabled = false;
+                updateWordDisplay(Array(data.wordLength).fill(null));
+                timerDisplay.textContent = '-';
+                scoreArea.style.display = 'block';
+                myScoreSpan.textContent = `${myUsername}: 0`;
+                opponentScoreSpan.textContent = `${opponentUsername}: 0`;
+            });
+
+            socket.on('tickStart', (data) => {
+                writeToLog('WS', 'tickStart', data);
+                if (countdownInterval) clearInterval(countdownInterval);
+                if (data.tickDuration) {
+                    let timeLeft = data.tickDuration / 1000;
+                    timerDisplay.textContent = timeLeft;
+                    countdownInterval = setInterval(() => {
+                        timeLeft--;
+                        if (timeLeft >= 0) timerDisplay.textContent = timeLeft;
+                        else clearInterval(countdownInterval);
+                    }, 1000);
+                }
+            });
+
+            socket.on('revealTile', (data) => {
+                writeToLog('WS', 'revealTile', data);
+                const currentWord = wordContainer.textContent.split(' ');
+                currentWord[data.index] = data.letter;
+                updateWordDisplay(currentWord);
+            });
+
+            socket.on('roundEnd', (data) => {
+                writeToLog('WS', 'roundEnd', data);
+                if (countdownInterval) clearInterval(countdownInterval);
+                timerDisplay.textContent = 'Over';
+                guessInput.disabled = true;
+                guessBtn.disabled = true;
+                const winnerUsername = data.winner ? (myUsername === data.winner ? myUsername : opponentUsername) : 'Draw';
+                showNotification(`Round Over! ${winnerUsername !== 'Draw' ? 'Winner: ' + winnerUsername : 'Draw'}. Word: ${data.revealedWord}`);
+                if (data.scores) {
+                    myScoreSpan.textContent = `${myUsername}: ${data.scores[myUsername]}`;
+                    opponentScoreSpan.textContent = `${opponentUsername}: ${data.scores[opponentUsername]}`;
+                }
+            });
+            
+            socket.on('nextRoundStarting', (data) => {
+                writeToLog('WS', 'nextRoundStarting', data);
+                showNotification('New round starting...');
+                timerDisplay.textContent = '-';
+                guessInput.disabled = false;
+                guessBtn.disabled = false;
+                updateWordDisplay(Array(data.wordLength).fill(null));
+            });
+            
+            socket.on('matchEnd', (data) => {
+                writeToLog('WS', 'matchEnd', data);
+                if (countdownInterval) clearInterval(countdownInterval);
+                timerDisplay.textContent = 'Game Over';
+                showNotification(`MATCH OVER! The winner is ${data.winner}!`);
+                joinLobbyBtn.disabled = false;
+                guessInput.disabled = true;
+                guessBtn.disabled = true;
+            });
+            
+            socket.on('exception', (data) => { // NestJS convention for WS errors
+                writeToLog('WS', 'exception', data);
+                showNotification(`Server Error: ${data.message}`);
+            });
+        }
+
+        connectBtn.addEventListener('click', () => {
+            if (!jwtToken) {
+                showNotification('You must log in first to connect.');
+                return;
+            }
+            socket = io('ws://localhost:3000', {
+                auth: { token: jwtToken } // Send the JWT for authentication
+            });
+            setupSocketListeners();
+        });
+
+        disconnectBtn.addEventListener('click', () => {
+            if (socket) socket.disconnect();
+        });
+
+        joinLobbyBtn.addEventListener('click', () => {
+            socket.emit('joinLobby');
+            writeToLog('WS', 'joinLobby (sent)', {});
+            joinLobbyBtn.textContent = "Waiting for Opponent...";
+            joinLobbyBtn.disabled = true;
+            showNotification('In lobby, waiting for opponent...');
+        });
+
+        guessBtn.addEventListener('click', () => {
+            const guess = guessInput.value;
+            if (!guess) return;
+            socket.emit('guess', { guess });
+            writeToLog('WS', 'guess (sent)', { guess });
+            guessInput.value = '';
+        });
+        
+        guessInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') guessBtn.click();
+        });
+
+    </script>
+</body>
+</html>

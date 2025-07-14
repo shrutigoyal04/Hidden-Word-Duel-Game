@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hidden Word Duel - Tick Cycle Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; gap: 20px; padding: 20px; background-color: #f0f2f5; }
+        .client-container { flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #333; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        input[type="text"] { padding: 10px; border: 1px solid #ccc; border-radius: 5px; margin-right: 10px; }
+        .log { height: 250px; overflow-y: scroll; border: 1px solid #eee; padding: 10px; background: #fafafa; margin-top: 15px; border-radius: 5px; font-size: 0.9em; }
+        .log div { padding: 3px 0; border-bottom: 1px solid #eee; }
+        .word-display { font-size: 2.5em; letter-spacing: 0.5em; text-align: center; margin: 20px 0; font-family: monospace; }
+        .timer { height: 5px; background-color: #007bff; width: 0%; transition: width 0.5s ease-out; }
+    </style>
+</head>
+<body>
+
+    <div class="client-container">
+        <h2>Client 1</h2>
+        <input type="text" id="p1_username" value="Alice">
+        <button id="p1_connectBtn" onclick="connectPlayer(1)">Connect to Lobby</button>
+        <div id="p1_gameArea" style="display:none;">
+            <h3 id="p1_gameTitle"></h3>
+            <div class="word-display" id="p1_wordDisplay"></div>
+            <div class="timer" id="p1_timer"></div>
+            <input type="text" id="p1_guessInput" placeholder="Enter guess...">
+            <button id="p1_guessBtn" onclick="submitGuess(1)">Submit Guess</button>
+        </div>
+        <div class="log" id="p1_log"></div>
+    </div>
+
+    <div class="client-container">
+        <h2>Client 2</h2>
+        <input type="text" id="p2_username" value="Bob">
+        <button id="p2_connectBtn" onclick="connectPlayer(2)">Connect to Lobby</button>
+        <div id="p2_gameArea" style="display:none;">
+            <h3 id="p2_gameTitle"></h3>
+            <div class="word-display" id="p2_wordDisplay"></div>
+            <div class="timer" id="p2_timer"></div>
+            <input type="text" id="p2_guessInput" placeholder="Enter guess...">
+            <button id="p2_guessBtn" onclick="submitGuess(2)">Submit Guess</button>
+        </div>
+        <div class="log" id="p2_log"></div>
+    </div>
+
+    <script>
+        const clients = {};
+
+        function logEvent(pNum, message) {
+            const log = document.getElementById(`p${pNum}_log`);
+            log.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateWordDisplay(pNum, wordLength, revealedTiles, revealedWord = '') {
+            const display = document.getElementById(`p${pNum}_wordDisplay`);
+            if (revealedWord) {
+                display.textContent = revealedWord.split('').join(' ');
+                return;
+            }
+            let text = '';
+            for (let i = 0; i < wordLength; i++) {
+                const tile = revealedTiles.find(t => t.index === i);
+                text += (tile ? tile.letter : '_') + ' ';
+            }
+            display.textContent = text.trim();
+        }
+        
+        function animateTimer(pNum) {
+            const timer = document.getElementById(`p${pNum}_timer`);
+            timer.style.transition = 'none';
+            timer.style.width = '100%';
+            setTimeout(() => {
+                timer.style.transition = 'width 10s linear';
+                timer.style.width = '0%';
+            }, 100);
+        }
+
+        function connectPlayer(pNum) {
+            const username = document.getElementById(`p${pNum}_username`).value;
+            logEvent(pNum, `Attempting to connect as ${username}...`);
+
+            const socket = io('http://localhost:3000', { transports: ['websocket'] });
+            clients[pNum] = { socket, username, pNum };
+
+            document.getElementById(`p${pNum}_connectBtn`).disabled = true;
+
+            socket.on('connect', () => {
+                logEvent(pNum, 'Connected to server. Joining lobby...');
+                socket.emit('joinLobby', { username });
+            });
+
+            socket.on('disconnect', () => {
+                logEvent(pNum, 'Disconnected.');
+                document.getElementById(`p${pNum}_connectBtn`).disabled = false;
+                document.getElementById(`p${pNum}_gameArea`).style.display = 'none';
+            });
+
+            socket.on('matchStarted', (data) => {
+                logEvent(pNum, `Match started! Match ID: ${data.matchId}. Joining game room...`);
+                clients[pNum].matchId = data.matchId;
+                clients[pNum].playerId = data.players.find(p => p.username === username)?.playerId;
+                clients[pNum].wordLength = data.initialRound.wordLength;
+                clients[pNum].revealedTiles = []; // Start with no revealed tiles known
+
+                document.getElementById(`p${pNum}_gameArea`).style.display = 'block';
+                document.getElementById(`p${pNum}_gameTitle`).textContent = `Match ID: ${data.matchId.substring(0, 8)}`;
+                updateWordDisplay(pNum, clients[pNum].wordLength, []);
+                
+                socket.emit('joinGameRoom', { matchId: data.matchId });
+            });
+            
+            // --- NEW TICK CYCLE LISTENERS ---
+
+            socket.on('tickStart', (data) => {
+                logEvent(pNum, `TICK START. You have 10 seconds to guess.`);
+                document.getElementById(`p${pNum}_guessBtn`).disabled = false;
+                animateTimer(pNum);
+            });
+
+            socket.on('revealTile', (data) => {
+                logEvent(pNum, `REVEAL: Letter '${data.letter}' at position ${data.index + 1}`);
+                clients[pNum].revealedTiles.push(data);
+                updateWordDisplay(pNum, clients[pNum].wordLength, clients[pNum].revealedTiles);
+            });
+
+            socket.on('roundEnd', (data) => {
+                const winnerMessage = data.winner ? `Winner: ${data.winner}` : 'Round is a draw.';
+                logEvent(pNum, `ROUND END. ${winnerMessage} The word was: ${data.revealedWord}`);
+                updateWordDisplay(pNum, 0, [], data.revealedWord);
+                document.getElementById(`p${pNum}_guessBtn`).disabled = true;
+            });
+
+            socket.on('nextRoundStarting', () => {
+                logEvent(pNum, 'Next round starting in 5 seconds...');
+            });
+            
+            socket.on('matchEnd', (data) => {
+                logEvent(pNum, `MATCH END! Final Winner: ${data.winner}`);
+                document.getElementById(`p${pNum}_guessBtn`).disabled = true;
+            });
+        }
+
+        function submitGuess(pNum) {
+            const client = clients[pNum];
+            const guessInput = document.getElementById(`p${pNum}_guessInput`);
+            const guess = guessInput.value;
+
+            if (!client || !client.socket?.connected || !guess) {
+                logEvent(pNum, "Cannot submit guess. Not connected or no guess provided.");
+                return;
+            }
+
+            logEvent(pNum, `Submitting guess: '${guess}'`);
+            client.socket.emit('submitGuess', {
+                matchId: client.matchId,
+                playerId: client.playerId,
+                guess: guess,
+            });
+            
+            document.getElementById(`p${pNum}_guessBtn`).disabled = true; // Disable after guessing
+            guessInput.value = '';
+        }
+
+    </script>
+</body>
+</html> 
