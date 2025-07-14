@@ -15,8 +15,10 @@ const RegisterForm = () => {
     setError('');
     setSuccess('');
 
+    // --- We are hardcoding the URL here for testing ---
+    const apiUrl = 'http://localhost:3000';
+
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
       const response = await axios.post(`${apiUrl}/auth/register`, {
         username,
         email,
@@ -27,9 +29,10 @@ const RegisterForm = () => {
       console.log('Registration successful:', response.data);
       // You could redirect the user here, e.g., router.push('/login');
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'An unexpected error occurred.';
+      // This will now likely be a "Network Error" because the backend is down
+      const errorMessage = err.response?.data?.message || err.message || 'An unexpected error occurred.';
       setError(errorMessage);
-      console.error('Registration failed:', err.response?.data || err.message);
+      console.error('Registration failed:', err.response?.data || err);
     }
   };
 
