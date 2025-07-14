@@ -15,7 +15,7 @@ const RegisterForm = () => {
     setError('');
     setSuccess('');
 
-    // --- We are hardcoding the URL here for testing ---
+    // --- Using the hardcoded URL as requested ---
     const apiUrl = 'http://localhost:3000';
 
     try {
@@ -29,7 +29,6 @@ const RegisterForm = () => {
       console.log('Registration successful:', response.data);
       // You could redirect the user here, e.g., router.push('/login');
     } catch (err: any) {
-      // This will now likely be a "Network Error" because the backend is down
       const errorMessage = err.response?.data?.message || err.message || 'An unexpected error occurred.';
       setError(errorMessage);
       console.error('Registration failed:', err.response?.data || err);
