@@ -34,6 +34,8 @@ const GamePage = () => {
     const [isRoundOver, setIsRoundOver] = useState(false);
     const [isGameOver, setIsGameOver] = useState(false);
     const [timer, setTimer] = useState(10);
+    const [roundWinner, setRoundWinner] = useState<string | null>(null);
+    const [matchWinner, setMatchWinner] = useState<string | null>(null);
 
     useEffect(() => {
         const token = localStorage.getItem('access_token');
@@ -77,6 +79,7 @@ const GamePage = () => {
 
         newSocket.on('roundEnd', (data: RoundEndData) => {
             setIsRoundOver(true);
+            setRoundWinner(data.winner);
             const winnerName = data.winner ? (data.winner === myUsername ? "You" : data.winner) : "Nobody";
             setMessage(`${winnerName} won the round! The word was: ${data.revealedWord}`);
             setScores({
@@ -94,12 +97,17 @@ const GamePage = () => {
 
         newSocket.on('matchEnd', (data: { winner: string }) => {
             setIsGameOver(true);
+            setMatchWinner(data.winner);
             const winnerName = data.winner === myUsername ? "You" : data.winner;
             setMessage(`GAME OVER! The winner is ${winnerName}`);
         });
 
+        newSocket.on('matchRestarted', (data: { matchId: string }) => {
+            router.push(`/game/${data.matchId}`);
+        });
+
         return () => { newSocket.disconnect(); };
-    }, [matchId, router, myUsername, opponentName, scores.opponent, scores.you]);
+    }, [matchId, router, myUsername, opponentName, scores.opponent, scores.you, roundWinner, matchWinner]);
 
     useEffect(() => {
         if (isRoundOver || isGameOver) return;
@@ -115,12 +123,24 @@ const GamePage = () => {
         }
     };
     
+    const handleRestartGame = () => {
+        if (socket) {
+            socket.emit('restartMatch', { matchId });
+        }
+    };
+
     return (
         <div className="container mx-auto max-w-2xl text-center mt-10 p-4">
             <div className="flex justify-between items-center mb-8">
-                <div className="text-left"><p className="text-white text-2xl font-bold">{myUsername}</p><p className="text-cyan-400 text-xl">Score: {scores.you}</p></div>
+                <div className={`text-left ${myUsername === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''} ${myUsername === matchWinner && isGameOver ? 'bg-purple-900 p-2 rounded-lg' : ''}`}>
+                    <p className="text-white text-2xl font-bold">{myUsername}</p>
+                    <p className="text-cyan-400 text-xl">Score: {scores.you}</p>
+                </div>
                 <div className="text-white text-4xl font-bold">VS</div>
-                <div className="text-right"><p className="text-white text-2xl font-bold">{opponentName}</p><p className="text-cyan-400 text-xl">Score: {scores.opponent}</p></div>
+                <div className={`text-right ${opponentName === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''} ${opponentName === matchWinner && isGameOver ? 'bg-purple-900 p-2 rounded-lg' : ''}`}>
+                    <p className="text-white text-2xl font-bold">{opponentName}</p>
+                    <p className="text-cyan-400 text-xl">Score: {scores.opponent}</p>
+                </div>
             </div>
             
             <div className="bg-gray-800 p-8 rounded-lg mb-8 min-h-[150px] flex flex-col justify-center">
@@ -138,7 +158,10 @@ const GamePage = () => {
             </div>
             
             {isGameOver ? (
-                <button onClick={() => router.push('/lobby')} className="bg-green-500 hover:bg-green-400 text-white font-bold py-4 px-8 rounded-lg text-2xl">Play Again</button>
+                <div className="flex gap-4 justify-center">
+                    <button onClick={handleRestartGame} className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-8 rounded-lg text-2xl">Restart Game</button>
+                    <button onClick={() => router.push('/lobby')} className="bg-green-500 hover:bg-green-400 text-white font-bold py-4 px-8 rounded-lg text-2xl">Back to Lobby</button>
+                </div>
             ) : (
                 <form onSubmit={handleGuessSubmit} className="flex gap-4 justify-center mb-8">
                     <input
@@ -152,6 +175,13 @@ const GamePage = () => {
             )}
 
             <div className="bg-gray-900 p-4 rounded-lg min-h-[50px]">
+                {isRoundOver && !isGameOver && (
+                    <p className="text-yellow-400 font-bold">
+                        {roundWinner === myUsername ? 'You won this round!' : 
+                         roundWinner === opponentName ? `${opponentName} won this round!` : 
+                         'This round ended in a draw!'}
+                    </p>
+                )}
                 {!isRoundOver && message}
             </div>
         </div>
