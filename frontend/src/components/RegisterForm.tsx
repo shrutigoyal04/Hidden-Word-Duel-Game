@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import axios from 'axios';
 
 const RegisterForm = () => {
@@ -15,7 +16,6 @@ const RegisterForm = () => {
     setError('');
     setSuccess('');
 
-    // --- Using the hardcoded URL as requested ---
     const apiUrl = 'http://localhost:3000';
 
     try {
@@ -90,6 +90,14 @@ const RegisterForm = () => {
           >
             Register
           </button>
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-400">
+            Already have an account?{" "}
+            <Link href="/login" className="text-cyan-400 hover:text-cyan-300">
+              Login here
+            </Link>
+          </p>
         </div>
       </form>
     </div>

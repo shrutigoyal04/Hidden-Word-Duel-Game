@@ -36,6 +36,7 @@ const GamePage = () => {
     const [timer, setTimer] = useState(10);
     const [roundWinner, setRoundWinner] = useState<string | null>(null);
     const [matchWinner, setMatchWinner] = useState<string | null>(null);
+    const [finalWord, setFinalWord] = useState('');
 
     useEffect(() => {
         const token = localStorage.getItem('access_token');
@@ -80,6 +81,7 @@ const GamePage = () => {
         newSocket.on('roundEnd', (data: RoundEndData) => {
             setIsRoundOver(true);
             setRoundWinner(data.winner);
+            setFinalWord(data.revealedWord);
             const winnerName = data.winner ? (data.winner === myUsername ? "You" : data.winner) : "Nobody";
             setMessage(`${winnerName} won the round! The word was: ${data.revealedWord}`);
             setScores({
@@ -129,53 +131,100 @@ const GamePage = () => {
         }
     };
 
+    // Game Over Screen
+    if (isGameOver) {
+        const isWinner = matchWinner === myUsername;
+        return (
+            <div className="container mx-auto max-w-2xl text-center mt-10 p-4">
+                {/* Winner Announcement */}
+                <div className="bg-gray-800 p-8 rounded-lg mb-8">
+                    <h1 className="text-4xl font-bold text-white mb-4">Game Over!</h1>
+                    
+                    <div className={`p-6 rounded-lg mb-6 ${isWinner ? 'bg-green-900' : 'bg-purple-900'}`}>
+                        <div className="text-yellow-300 text-6xl mb-4">
+                            {isWinner ? '🏆 You Won! 🏆' : `${matchWinner} Won!`}
+                        </div>
+                        <div className="text-white text-2xl">
+                            Final Score: {scores.you} - {scores.opponent}
+                        </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center mb-8">
+                        <div className={`text-left p-4 rounded-lg ${isWinner ? 'bg-green-800' : 'bg-gray-700'}`}>
+                            <p className="text-white text-2xl font-bold">{myUsername}</p>
+                            <p className="text-cyan-400 text-xl">Score: {scores.you}</p>
+                        </div>
+                        <div className="text-white text-4xl font-bold">VS</div>
+                        <div className={`text-right p-4 rounded-lg ${!isWinner ? 'bg-green-800' : 'bg-gray-700'}`}>
+                            <p className="text-white text-2xl font-bold">{opponentName}</p>
+                            <p className="text-cyan-400 text-xl">Score: {scores.opponent}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Options */}
+                <div className="bg-gray-800 p-8 rounded-lg">
+                    <h2 className="text-2xl font-bold text-white mb-6">What would you like to do next?</h2>
+                    <div className="flex flex-col gap-4">
+                        <button 
+                            onClick={handleRestartGame} 
+                            className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-8 rounded-lg text-xl flex items-center justify-center"
+                        >
+                            <span className="mr-2">🔄</span> Play Again with Same Player
+                        </button>
+                        <button 
+                            onClick={() => router.push('/lobby')} 
+                            className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-8 rounded-lg text-xl flex items-center justify-center"
+                        >
+                            <span className="mr-2">🏠</span> Return to Lobby
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Regular Game Screen
     return (
         <div className="container mx-auto max-w-2xl text-center mt-10 p-4">
             <div className="flex justify-between items-center mb-8">
-                <div className={`text-left ${myUsername === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''} ${myUsername === matchWinner && isGameOver ? 'bg-purple-900 p-2 rounded-lg' : ''}`}>
+                <div className={`text-left ${myUsername === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''}`}>
                     <p className="text-white text-2xl font-bold">{myUsername}</p>
                     <p className="text-cyan-400 text-xl">Score: {scores.you}</p>
                 </div>
                 <div className="text-white text-4xl font-bold">VS</div>
-                <div className={`text-right ${opponentName === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''} ${opponentName === matchWinner && isGameOver ? 'bg-purple-900 p-2 rounded-lg' : ''}`}>
+                <div className={`text-right ${opponentName === roundWinner && !isGameOver ? 'bg-green-900 p-2 rounded-lg' : ''}`}>
                     <p className="text-white text-2xl font-bold">{opponentName}</p>
                     <p className="text-cyan-400 text-xl">Score: {scores.opponent}</p>
                 </div>
             </div>
             
             <div className="bg-gray-800 p-8 rounded-lg mb-8 min-h-[150px] flex flex-col justify-center">
-                 {isGameOver ? (
-                    <p className="text-green-400 text-3xl">{message}</p>
-                ) : (
-                    <>
-                        <div className="flex justify-between items-center mb-4">
-                            <p className="text-gray-400 text-lg">Guess the word:</p>
-                            {!isRoundOver && <p className="text-cyan-400 text-lg">Next letter in: {timer}s</p>}
-                        </div>
-                        <div className="text-white text-5xl font-mono tracking-[0.2em]">{word.length > 0 ? word.join(' ') : '...'}</div>
-                    </>
+                <div className="flex justify-between items-center mb-4">
+                    <p className="text-gray-400 text-lg">Guess the word:</p>
+                    {!isRoundOver && <p className="text-cyan-400 text-lg">Next letter in: {timer}s</p>}
+                </div>
+                <div className="text-white text-5xl font-mono tracking-[0.2em]">{word.length > 0 ? word.join(' ') : '...'}</div>
+                
+                {isRoundOver && (
+                    <div className="mt-4 text-yellow-400">
+                        <p>The word was: <span className="font-bold">{finalWord}</span></p>
+                    </div>
                 )}
             </div>
             
-            {isGameOver ? (
-                <div className="flex gap-4 justify-center">
-                    <button onClick={handleRestartGame} className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-8 rounded-lg text-2xl">Restart Game</button>
-                    <button onClick={() => router.push('/lobby')} className="bg-green-500 hover:bg-green-400 text-white font-bold py-4 px-8 rounded-lg text-2xl">Back to Lobby</button>
-                </div>
-            ) : (
-                <form onSubmit={handleGuessSubmit} className="flex gap-4 justify-center mb-8">
-                    <input
-                        name="guess" type="text" placeholder="Guess the whole word"
-                        value={guess} onChange={(e) => setGuess(e.target.value.toLowerCase())}
-                        disabled={isRoundOver}
-                        className="h-20 text-2xl text-center bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:outline-none focus:border-cyan-500 flex-grow disabled:bg-gray-600"
-                    />
-                    <button type="submit" disabled={isRoundOver} className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold h-20 px-8 rounded-lg text-xl disabled:bg-gray-500">Guess Word</button>
-                </form>
-            )}
+            <form onSubmit={handleGuessSubmit} className="flex gap-4 justify-center mb-8">
+                <input
+                    name="guess" type="text" placeholder="Guess the whole word"
+                    value={guess} onChange={(e) => setGuess(e.target.value.toLowerCase())}
+                    disabled={isRoundOver}
+                    className="h-20 text-2xl text-center bg-gray-700 text-white border-2 border-gray-600 rounded-lg focus:outline-none focus:border-cyan-500 flex-grow disabled:bg-gray-600"
+                />
+                <button type="submit" disabled={isRoundOver} className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold h-20 px-8 rounded-lg text-xl disabled:bg-gray-500">Guess Word</button>
+            </form>
 
             <div className="bg-gray-900 p-4 rounded-lg min-h-[50px]">
-                {isRoundOver && !isGameOver && (
+                {isRoundOver && (
                     <p className="text-yellow-400 font-bold">
                         {roundWinner === myUsername ? 'You won this round!' : 
                          roundWinner === opponentName ? `${opponentName} won this round!` : 

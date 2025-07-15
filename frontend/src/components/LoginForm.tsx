@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // Import the router
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import axios from 'axios';
 
 const LoginForm = () => {
@@ -9,14 +10,13 @@ const LoginForm = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const router = useRouter(); // Initialize the router
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
-    // --- Using the hardcoded URL as requested ---
     const apiUrl = 'http://localhost:3000';
 
     try {
@@ -81,6 +81,14 @@ const LoginForm = () => {
           >
             Sign In
           </button>
+        </div>
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-400">
+            Don't have an account?{" "}
+            <Link href="/register" className="text-cyan-400 hover:text-cyan-300">
+              Register here
+            </Link>
+          </p>
         </div>
       </form>
     </div>

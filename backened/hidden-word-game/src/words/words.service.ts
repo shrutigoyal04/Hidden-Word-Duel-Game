@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs'; //RxJS method converts an Observable to a Promise.
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class WordsService {
@@ -14,24 +14,27 @@ export class WordsService {
 
   async getNewWord(): Promise<string> {
     try {
-      // We will try to fetch a random word from the API.
       const response = await firstValueFrom(
         this.httpService.get<string[]>('https://random-word-api.herokuapp.com/word?number=1')
       );
       const word = response.data[0];
-      this.logger.log(`Fetched new word from API: ${word}`);
+      // Make the word log stand out
+      console.log('\n==============================');
+      console.log(`🎮 GAME WORD: "${word}" 🎮`);
+      console.log('==============================\n');
       return word;
     } catch (error) {
-      // If the API fails for any reason, we log the error and use our fallback list.
-      this.logger.error('Failed to fetch word from API, using fallback list.', error.stack);
-      return this.getFallbackWord();
+      const fallbackWord = this.getFallbackWord();
+      // Make the fallback word log stand out
+      console.log('\n==============================');
+      console.log(`🎮 FALLBACK WORD: "${fallbackWord}" 🎮`);
+      console.log('==============================\n');
+      return fallbackWord;
     }
   }
 
   private getFallbackWord(): string {
     const randomIndex = Math.floor(Math.random() * this.fallbackWordList.length);
-    const fallbackWord = this.fallbackWordList[randomIndex];
-    this.logger.log(`Using fallback word: ${fallbackWord}`);
-    return fallbackWord;
+    return this.fallbackWordList[randomIndex];
   }
 } 

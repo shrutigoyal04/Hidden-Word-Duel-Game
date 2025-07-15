@@ -16,6 +16,32 @@ import { Match } from './match/entities/match.entity';
 import { Round } from './round/entities/round.entity';
 import { Guess } from './guess/entities/guess.entity';
 
+// Create a selective logger that only filters database queries
+class SelectiveLogger {
+  // Filter out SQL queries
+  logQuery() {}
+  logQueryError() {}
+  logQuerySlow() {}
+  logSchemaBuild() {}
+  logMigration() {}
+  
+  // Allow normal application logs
+  log(level: string, message: any) {
+    // Only pass through non-query logs
+    if (!String(message).includes('query:') && !String(message).includes('PARAMETERS:')) {
+      if (level === 'log') {
+        console.log(message);
+      } else if (level === 'info') {
+        console.info(message);
+      } else if (level === 'warn') {
+        console.warn(message);
+      } else if (level === 'error') {
+        console.error(message);
+      }
+    }
+  }
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,14 +52,14 @@ import { Guess } from './guess/entities/guess.entity';
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
       port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME, // Use environment variables
-      password: process.env.DB_PASSWORD, // Use environment variables
-      database: process.env.DB_NAME,     // Use environment variables
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
       entities: [Players, Match, Round, Guess],
-      synchronize: true, // `true` for development to auto-create schema. Set to `false` in production.
+      synchronize: true,
       autoLoadEntities: true,
-      // dropSchema: true,
-      logging: true,
+      logging: false,
+      logger: new SelectiveLogger(), // Use selective logger instead of silent logger
     }),
     PlayersModule,
     AuthModule,
