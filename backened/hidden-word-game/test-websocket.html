@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hidden Word Duel - Lobby Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .player-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .player-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .lobby-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .player-list {
+            list-style: none;
+            padding: 0;
+        }
+        .player-list li {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hidden Word Duel - Lobby Test</h1>
+        
+        <div class="player-section">
+            <h3>Player 1</h3>
+            <input type="text" id="player1Id" placeholder="Player 1 ID" value="player1">
+            <input type="text" id="player1Username" placeholder="Player 1 Username" value="Alice">
+            <button onclick="connectPlayer1()">Connect Player 1</button>
+            <button onclick="disconnectPlayer1()" disabled id="disconnect1">Disconnect</button>
+            <div id="status1" class="status"></div>
+        </div>
+
+        <div class="player-section">
+            <h3>Player 2</h3>
+            <input type="text" id="player2Id" placeholder="Player 2 ID" value="player2">
+            <input type="text" id="player2Username" placeholder="Player 2 Username" value="Bob">
+            <button onclick="connectPlayer2()">Connect Player 2</button>
+            <button onclick="disconnectPlayer2()" disabled id="disconnect2">Disconnect</button>
+            <div id="status2" class="status"></div>
+        </div>
+
+        <div class="lobby-info">
+            <h3>Lobby Status</h3>
+            <div id="lobbyStatus">Not connected</div>
+            <ul id="playerList" class="player-list"></ul>
+        </div>
+
+        <div class="player-section">
+            <h3>Game Events</h3>
+            <div id="gameEvents" class="status info">
+                Waiting for players to connect...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket1 = null;
+        let socket2 = null;
+
+        function updateStatus(playerNum, message, type = 'info') {
+            const statusDiv = document.getElementById(`status${playerNum}`);
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function updateLobbyStatus(status) {
+            const lobbyStatus = document.getElementById('lobbyStatus');
+            lobbyStatus.textContent = status;
+        }
+
+        function updatePlayerList(players) {
+            const playerList = document.getElementById('playerList');
+            playerList.innerHTML = '';
+            
+            if (players && players.length > 0) {
+                players.forEach(player => {
+                    const li = document.createElement('li');
+                    li.textContent = `${player.username} (${player.playerId})`;
+                    playerList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.textContent = 'No players in lobby';
+                playerList.appendChild(li);
+            }
+        }
+
+        function addGameEvent(event) {
+            const eventsDiv = document.getElementById('gameEvents');
+            const timestamp = new Date().toLocaleTimeString();
+            eventsDiv.innerHTML += `<div>[${timestamp}] ${event}</div>`;
+            eventsDiv.scrollTop = eventsDiv.scrollHeight;
+        }
+
+        function connectPlayer1() {
+            const playerId = document.getElementById('player1Id').value;
+            const username = document.getElementById('player1Username').value;
+            
+            if (!playerId || !username) {
+                updateStatus(1, 'Please enter both ID and username', 'error');
+                return;
+            }
+
+            socket1 = io('http://localhost:3000');
+            
+            socket1.on('connect', () => {
+                updateStatus(1, 'Connected to server', 'success');
+                document.getElementById('disconnect1').disabled = false;
+                
+                socket1.emit('joinLobby', { playerId, username });
+            });
+
+            socket1.on('playerJoined', (data) => {
+                addGameEvent(`Player joined: ${data.username} (${data.playerId}) - Lobby size: ${data.lobbySize}`);
+            });
+
+            socket1.on('startRound', (data) => {
+                addGameEvent(`🎮 ROUND STARTED! Round ID: ${data.roundId}`);
+                addGameEvent(`Players: ${data.players.map(p => p.username).join(' vs ')}`);
+            });
+
+            socket1.on('playerLeft', (data) => {
+                addGameEvent(`Player left: ${data.playerId}`);
+            });
+
+            socket1.on('disconnect', () => {
+                updateStatus(1, 'Disconnected from server', 'error');
+                document.getElementById('disconnect1').disabled = true;
+            });
+        }
+
+        function connectPlayer2() {
+            const playerId = document.getElementById('player2Id').value;
+            const username = document.getElementById('player2Username').value;
+            
+            if (!playerId || !username) {
+                updateStatus(2, 'Please enter both ID and username', 'error');
+                return;
+            }
+
+            socket2 = io('http://localhost:3000');
+            
+            socket2.on('connect', () => {
+                updateStatus(2, 'Connected to server', 'success');
+                document.getElementById('disconnect2').disabled = false;
+                
+                socket2.emit('joinLobby', { playerId, username });
+            });
+
+            socket2.on('playerJoined', (data) => {
+                addGameEvent(`Player joined: ${data.username} (${data.playerId}) - Lobby size: ${data.lobbySize}`);
+            });
+
+            socket2.on('startRound', (data) => {
+                addGameEvent(`🎮 ROUND STARTED! Round ID: ${data.roundId}`);
+                addGameEvent(`Players: ${data.players.map(p => p.username).join(' vs ')}`);
+            });
+
+            socket2.on('playerLeft', (data) => {
+                addGameEvent(`Player left: ${data.playerId}`);
+            });
+
+            socket2.on('disconnect', () => {
+                updateStatus(2, 'Disconnected from server', 'error');
+                document.getElementById('disconnect2').disabled = true;
+            });
+        }
+
+        function disconnectPlayer1() {
+            if (socket1) {
+                socket1.emit('leaveLobby');
+                socket1.disconnect();
+                socket1 = null;
+                updateStatus(1, 'Disconnected', 'info');
+                document.getElementById('disconnect1').disabled = true;
+            }
+        }
+
+        function disconnectPlayer2() {
+            if (socket2) {
+                socket2.emit('leaveLobby');
+                socket2.disconnect();
+                socket2 = null;
+                updateStatus(2, 'Disconnected', 'info');
+                document.getElementById('disconnect2').disabled = true;
+            }
+        }
+
+        // Auto-refresh lobby status
+        setInterval(() => {
+            if (socket1) {
+                socket1.emit('getLobbyStatus', {}, (response) => {
+                    if (response.success) {
+                        updateLobbyStatus(`Players: ${response.lobby.players.length}/2`);
+                        updatePlayerList(response.lobby.players);
+                    }
+                });
+            }
+        }, 2000);
+    </script>
+</body>
+</html> 
