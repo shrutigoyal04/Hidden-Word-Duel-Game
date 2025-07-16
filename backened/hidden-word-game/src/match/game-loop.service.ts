@@ -10,7 +10,7 @@ const POST_ROUND_DELAY_MS = 5000; // 5 seconds between rounds
 
 @Injectable()
 export class GameLoopService {
-  private readonly logger = new Logger(GameLoopService.name);
+  // private readonly logger = new Logger(GameLoopService.name);
   private activeLoops = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -22,7 +22,7 @@ export class GameLoopService {
 
   startLoop(matchId: string, server: Server) {
     if (this.activeLoops.has(matchId)) return;
-    this.logger.log(`Starting game loop for match: ${matchId}`);
+    // this.logger.log(`Starting game loop for match: ${matchId}`);
     
     // Start the first tick immediately without waiting
     this.executeTick(matchId, server);
@@ -33,7 +33,7 @@ export class GameLoopService {
 
   stopLoop(matchId: string) {
     if (this.activeLoops.has(matchId)) {
-      this.logger.log(`Stopping game loop for match: ${matchId}`);
+      // this.logger.log(`Stopping game loop for match: ${matchId}`);
       clearInterval(this.activeLoops.get(matchId)!);
       this.activeLoops.delete(matchId);
     }
@@ -106,7 +106,7 @@ export class GameLoopService {
       server.to(matchId).emit('nextRoundStarting', { wordLength: newRound.word.length });
       this.startLoop(matchId, server);
     } catch (error) {
-      this.logger.error(`Failed to start next round for match ${matchId}:`, error);
+      // this.logger.error(`Failed to start next round for match ${matchId}:`, error);
       server.to(matchId).emit('error', 'Failed to start the next round.');
     }
   }

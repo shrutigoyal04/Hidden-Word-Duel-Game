@@ -14,7 +14,7 @@ import { WsJwtGuard } from '../auth/ws-jwt.guard';
 export class LobbyGateway {
   @WebSocketServer()
   server: Server;
-  private readonly logger = new Logger(LobbyGateway.name);
+  // private readonly logger = new Logger(LobbyGateway.name);
 
   constructor(
     private readonly lobbyService: LobbyService,
@@ -35,7 +35,7 @@ export class LobbyGateway {
     if (waitingPlayers.length >= 2) {
       const [player1, player2] = waitingPlayers;
       await this.lobbyService.clearLobby();
-      this.logger.log(`Match found: ${player1.playerId} vs ${player2.playerId}`);
+      // this.logger.log(`Match found: ${player1.playerId} vs ${player2.playerId}`);
 
       const { match } = await this.matchService.createMatch(player1.playerId, player2.playerId);
       
