@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'; // No longer importing forwardRef
+import { Module } from '@nestjs/common'; 
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Round } from './entities/round.entity';
 import { RoundService } from './round.service';
@@ -9,7 +9,6 @@ import { WordsModule } from '../words/words.module';
   imports: [
     TypeOrmModule.forFeature([Round]),
     WordsModule,
-    // REMOVED: forwardRef(() => MatchModule) is no longer needed
   ],
   providers: [RoundService],
   controllers: [RoundController],

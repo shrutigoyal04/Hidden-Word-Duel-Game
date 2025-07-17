@@ -22,7 +22,7 @@ export class MatchService {
     return this.matchRepository.findOneBy({ id });
   }
 
-  async createMatch(player1Id: string, player2Id: string) {
+  async createMatch(player1Id: string, player2Id: string) { 
     const match = this.matchRepository.create({ player1Id, player2Id });
     await this.matchRepository.save(match);
     const round = await this.roundService.startNewRound(match.id);

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'; // No longer importing forwardRef
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Match } from './entities/match.entity';
 import { MatchService } from './match.service';

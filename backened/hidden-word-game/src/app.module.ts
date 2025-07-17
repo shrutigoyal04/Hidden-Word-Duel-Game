@@ -16,30 +16,14 @@ import { Match } from './match/entities/match.entity';
 import { Round } from './round/entities/round.entity';
 import { Guess } from './guess/entities/guess.entity';
 
-// Create a selective logger that only filters database queries
-class SelectiveLogger {
-  // Filter out SQL queries
+// Create a silent logger that does nothing
+class SilentLogger {
   logQuery() {}
   logQueryError() {}
   logQuerySlow() {}
   logSchemaBuild() {}
   logMigration() {}
-  
-  // Allow normal application logs
-  log(level: string, message: any) {
-    // Only pass through non-query logs
-    if (!String(message).includes('query:') && !String(message).includes('PARAMETERS:')) {
-      if (level === 'log') {
-        console.log(message);
-      } else if (level === 'info') {
-        console.info(message);
-      } else if (level === 'warn') {
-        console.warn(message);
-      } else if (level === 'error') {
-        console.error(message);
-      }
-    }
-  }
+  log() {}
 }
 
 @Module({
@@ -59,7 +43,7 @@ class SelectiveLogger {
       synchronize: true,
       autoLoadEntities: true,
       logging: false,
-      logger: new SelectiveLogger(), // Use selective logger instead of silent logger
+      logger: new SilentLogger(), // Add this custom logger
     }),
     PlayersModule,
     AuthModule,
