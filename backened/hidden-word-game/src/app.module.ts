@@ -38,7 +38,8 @@ class SilentLogger {
       port: parseInt(process.env.DB_PORT || '5432', 10),
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
+      // .env defines DB_DATABASE; fall back to DB_NAME for compatibility.
+      database: process.env.DB_DATABASE || process.env.DB_NAME,
       entities: [Players, Match, Round, Guess],
       synchronize: true,
       autoLoadEntities: true,

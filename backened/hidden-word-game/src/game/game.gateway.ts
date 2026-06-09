@@ -28,10 +28,18 @@ export class GameGateway implements OnGatewayDisconnect {
   ) {}
 
   handleDisconnect(client: Socket) {
-    const matchId = Array.from(client.rooms).find(room => room !== client.id);
-    if (matchId) {
-      this.gameLoopService.stopLoop(matchId);
-      this.logger.log(`Player disconnected, stopping loop for match ${matchId}`);
+    // client.rooms is already emptied on disconnect, so rely on the matchId we
+    // stashed on the socket during joinGame.
+    const matchId: string | undefined = client.data.matchId;
+    const playerId: string | undefined = client.data.user?.sub;
+    if (matchId && playerId) {
+      this.logger.log(`Player ${playerId} disconnected from match ${matchId}`);
+      // Start the forfeit grace period; the opponent wins if no rejoin in time.
+      void this.gameLoopService.handlePlayerDisconnect(
+        matchId,
+        playerId,
+        this.server,
+      );
     }
   }
 
@@ -43,7 +51,12 @@ export class GameGateway implements OnGatewayDisconnect {
   ) {
     const user = client.data.user; // Get user payload from the guard
     client.join(data.matchId);
+    // Remember the match on the socket so we can resolve it on disconnect.
+    client.data.matchId = data.matchId;
     this.logger.log(`Player ${user.username} joined game room ${data.matchId}`);
+
+    // The player (re)joined in time → cancel any pending disconnect forfeit.
+    this.gameLoopService.clearForfeit(data.matchId);
 
     const match = await this.matchService.findOne(data.matchId);
     const round = await this.roundService.getLatestRoundForMatch(data.matchId);
@@ -69,7 +82,7 @@ export class GameGateway implements OnGatewayDisconnect {
       const room = this.server.sockets.adapter.rooms.get(data.matchId);
       if (room && room.size === 2 && !this.gameLoopService.isLoopActive(match.id)) {
         this.logger.log(`Both players present. Starting loop for match ${match.id}`);
-        this.gameLoopService.startLoop(match.id, this.server);
+        void this.gameLoopService.startLoop(match.id, this.server);
       }
     }
   }
@@ -77,16 +90,24 @@ export class GameGateway implements OnGatewayDisconnect {
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('guess')
   handleGuess(
-    @MessageBody() data: { guess: string },
+    @MessageBody() data: { guess: string; roundId?: string },
     @ConnectedSocket() client: Socket,
   ) {
-    // CORRECT: Get player ID directly from the validated token payload
+    // Get player ID directly from the validated token payload.
     const playerId = client.data.user.sub;
-    const matchId = Array.from(client.rooms).find(room => room !== client.id);
+    const matchId: string | undefined = client.data.matchId;
 
     if (matchId && playerId && data.guess) {
-      // Delegate the guess processing to the single source of truth: GameLoopService
-      this.gameLoopService.processGuess(matchId, playerId, data.guess, this.server);
+      // Delegate to the single source of truth: GameLoopService enforces the
+      // tick window, one-guess-per-tick, and draw rules server-side.
+      void this.gameLoopService.processGuess(
+        matchId,
+        playerId,
+        data.roundId,
+        data.guess,
+        client,
+        this.server,
+      );
     }
   }
 

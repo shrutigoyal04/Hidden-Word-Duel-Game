@@ -27,4 +27,9 @@ export class PlayersService {
     const player = this.playersRepository.create(playerData);
     return this.playersRepository.save(player);
   }
+
+  /** Atomically bump a player's career win count (used on match win). */
+  async incrementWins(playerId: string): Promise<void> {
+    await this.playersRepository.increment({ id: playerId }, 'totalWins', 1);
+  }
 }

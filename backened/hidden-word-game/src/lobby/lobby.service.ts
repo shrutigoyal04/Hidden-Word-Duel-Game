@@ -24,6 +24,13 @@ export class LobbyService {
     );
   }
 
+  // Remove a player by their socket id (used when a lobby socket disconnects).
+  async removePlayerBySocketId(socketId: string): Promise<void> {
+    this.waitingPlayers = this.waitingPlayers.filter(
+      (p) => p.socketId !== socketId,
+    );
+  }
+
   async getWaitingPlayersWithSockets(): Promise<
     { playerId: string; socketId: string }[]
   > {

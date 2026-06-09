@@ -3,6 +3,7 @@ import {
   WebSocketServer,
   SubscribeMessage,
   ConnectedSocket,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
@@ -11,15 +12,20 @@ import { MatchService } from '../match/match.service';
 import { WsJwtGuard } from '../auth/ws-jwt.guard';
 
 @WebSocketGateway({ cors: { origin: '*' } })
-export class LobbyGateway {
+export class LobbyGateway implements OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
-  // private readonly logger = new Logger(LobbyGateway.name);
+  private readonly logger = new Logger(LobbyGateway.name);
 
   constructor(
     private readonly lobbyService: LobbyService,
     private readonly matchService: MatchService,
   ) {}
+
+  // Clean up a player from the waiting queue if they disconnect before pairing.
+  async handleDisconnect(client: Socket) {
+    await this.lobbyService.removePlayerBySocketId(client.id);
+  }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinLobby')
@@ -34,13 +40,15 @@ export class LobbyGateway {
 
     if (waitingPlayers.length >= 2) {
       const [player1, player2] = waitingPlayers;
-      await this.lobbyService.clearLobby();
-      // this.logger.log(`Match found: ${player1.playerId} vs ${player2.playerId}`);
+      // Remove only the two paired players so a queued 3rd player keeps waiting.
+      await this.lobbyService.removePlayerFromLobby(player1.playerId);
+      await this.lobbyService.removePlayerFromLobby(player2.playerId);
+      this.logger.log(`Match found: ${player1.playerId} vs ${player2.playerId}`);
 
       const { match } = await this.matchService.createMatch(player1.playerId, player2.playerId);
-      
+
       // Tell both clients the match is ready and which URL to go to.
       this.server.to(player1.socketId).to(player2.socketId).emit('matchReady', { matchId: match.id });
     }
   }
-} 
+}

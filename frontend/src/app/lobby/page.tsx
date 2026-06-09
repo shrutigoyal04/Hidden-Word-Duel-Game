@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const LobbyPage = () => {
   const router = useRouter();
   const [status, setStatus] = useState('');
+  // A single socket instance for the lobby, reused by the Find Match button.
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token');
@@ -16,6 +18,7 @@ const LobbyPage = () => {
     }
 
     const socket = io('http://localhost:3000', { auth: { token } });
+    socketRef.current = socket;
 
     socket.on('connect', () => {
       setStatus('Connected to lobby. Ready to find a match.');
@@ -26,30 +29,17 @@ const LobbyPage = () => {
       router.push(`/game/${data.matchId}`);
     });
 
-    const findMatch = () => {
-        setStatus('Searching for an opponent...');
-        socket.emit('joinLobby');
-    };
-
-    // This is just here for demonstration; the button will call findMatch.
-    // In a real app you might auto-queue.
-    
     return () => {
       socket.disconnect();
+      socketRef.current = null;
     };
   }, [router]);
 
-  // A helper function to be called by the button.
+  // Queue this player for matchmaking using the existing lobby socket.
   const handleFindMatch = () => {
-      const token = localStorage.getItem('access_token');
-      const socket = io('http://localhost:3000', { auth: { token } });
-      socket.on('connect', () => {
-          setStatus('Searching for an opponent...');
-          socket.emit('joinLobby');
-      });
-      socket.on('matchReady', (data: { matchId: string }) => {
-          router.push(`/game/${data.matchId}`);
-      });
+    if (!socketRef.current) return;
+    setStatus('Searching for an opponent...');
+    socketRef.current.emit('joinLobby');
   };
 
   return (

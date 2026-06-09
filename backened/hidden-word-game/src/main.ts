@@ -9,7 +9,7 @@ async function bootstrap() {
   // Create the app with default logger
   const app = await NestFactory.create(AppModule, {
     // Don't disable the logger here
-    logger: false,
+    // logger: false, // COMMENT OUT or REMOVE THIS LINE
   });
 
   app.enableCors({

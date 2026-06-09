@@ -29,7 +29,8 @@ export class MatchService {
     return { match, round };
   }
 
-  // ADDED: This method was missing, causing an error in the game loop.
+  // Applies a round result to the match. winnerId === null means a draw / no
+  // winner for the round (no points awarded).
   async updateScores(matchId: string, winnerId: string | null) {
     const match = await this.findOne(matchId);
     if (!match) throw new NotFoundException('Match not found');
@@ -41,10 +42,19 @@ export class MatchService {
         match.score2++;
       }
     }
-    
+
+    // Complete the match once a player reaches the target score.
     if (match.score1 >= MAX_SCORE || match.score2 >= MAX_SCORE) {
       match.status = 'completed';
-      match.winnerId = match.score1 > match.score2 ? match.player1Id : match.player2Id;
+      // Equal scores can't happen at first-to-3, but guard for a true draw.
+      if (match.score1 === match.score2) {
+        match.winnerId = null;
+      } else {
+        match.winnerId =
+          match.score1 > match.score2 ? match.player1Id : match.player2Id;
+        // The match winner earns a career win.
+        await this.playersService.incrementWins(match.winnerId);
+      }
     }
 
     const updatedMatch = await this.matchRepository.save(match);
@@ -54,6 +64,30 @@ export class MatchService {
     if (!player1 || !player2) throw new NotFoundException('Could not find one or both players');
 
     return { updatedMatch, player1, player2 };
+  }
+
+  /**
+   * Force-complete a match because the opponent disconnected. The remaining
+   * player is declared the winner regardless of the current score.
+   */
+  async forfeitMatch(matchId: string, winnerId: string) {
+    const match = await this.findOne(matchId);
+    if (!match) throw new NotFoundException('Match not found');
+
+    match.status = 'completed';
+    match.winnerId = winnerId;
+    const updatedMatch = await this.matchRepository.save(match);
+    await this.playersService.incrementWins(winnerId);
+
+    const player1 = await this.playersService.findOneById(match.player1Id);
+    const player2 = await this.playersService.findOneById(match.player2Id);
+    const winner = winnerId === match.player1Id ? player1 : player2;
+
+    if (!player1 || !player2 || !winner) {
+      throw new NotFoundException('Could not find one or both players');
+    }
+
+    return { match: updatedMatch, winner, player1, player2 };
   }
 
   async restartMatch(matchId: string) {
